@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "824489867326",
+    "project_id": "walletwiseapp-e0f68",
+    "storage_bucket": "walletwiseapp-e0f68.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:824489867326:android:1d3e6b96a7b0963459f96f",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6htj5cHcxk1EQ6xcpDPTltgkLdY4p-7s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
