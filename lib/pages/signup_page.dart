@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -19,24 +21,61 @@ class _SignupPageState extends State<SignupPage> {
   // Toggles for password visibility
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+  
+  // Loading state for the button
+  bool _isLoading = false;
 
-  // Theme color (Keep this consistent with your Login Page)
+  // Theme color
   final Color primaryColor = const Color(0xFF4CAF50);
 
-  void _handleSignUp() {
+  void _handleSignUp() async {
     if (_formKey.currentState!.validate()) {
-      String name = _nameController.text;
-      String email = _emailController.text;
-      // ignore: unused_local_variable
-      String password = _passwordController.text;
+      setState(() => _isLoading = true);
 
-      print("Registering: $name ($email)");
+      try {
+        // 1. Create User in Auth
+        UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully!')),
-      );
+        User? user = userCredential.user;
 
-      Navigator.pop(context);
+        if (user != null) {
+          // 2. Update Display Name
+          await user.updateDisplayName(_nameController.text.trim());
+
+          // 3. Initialize Database Entry
+          DatabaseReference ref = FirebaseDatabase.instance.ref("users/${user.uid}");
+          await ref.set({
+            "profile": {
+              "name": _nameController.text.trim(),
+              "email": _emailController.text.trim(),
+            },
+            "finances": {
+              "balance": 0.0,
+              "monthlyIncome": 0.0,
+            },
+            "transactions": {},
+            "goals": {}
+          });
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Account created successfully!')),
+            );
+            Navigator.pop(context); // Go back to Login
+          }
+        }
+      } on FirebaseAuthException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.message ?? 'Registration failed')),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -47,6 +86,19 @@ class _SignupPageState extends State<SignupPage> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  // Helper method for input styling
+  InputDecoration _inputDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: primaryColor),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: primaryColor, width: 2),
+      ),
+    );
   }
 
   @override
@@ -84,12 +136,9 @@ class _SignupPageState extends State<SignupPage> {
                       color: Colors.black87,
                     ),
                   ),
-
-                  // Fixed Here ↓↓↓
                   const SizedBox(height: 8.0),
-
                   const Text(
-                    'Start saving with BudgetBuddy',
+                    'Start saving with WalletWise',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: Colors.grey, fontSize: 16),
                   ),
@@ -172,7 +221,7 @@ class _SignupPageState extends State<SignupPage> {
 
                   // SIGN UP BUTTON
                   ElevatedButton(
-                    onPressed: _handleSignUp,
+                    onPressed: _isLoading ? null : _handleSignUp,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
@@ -182,10 +231,19 @@ class _SignupPageState extends State<SignupPage> {
                       ),
                       elevation: 2,
                     ),
-                    child: const Text(
-                      'SIGN UP',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'SIGN UP',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                          ),
                   ),
 
                   const SizedBox(height: 24.0),
@@ -212,19 +270,6 @@ class _SignupPageState extends State<SignupPage> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  // Input style helper
-  InputDecoration _inputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon, color: primaryColor),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: primaryColor, width: 2),
       ),
     );
   }

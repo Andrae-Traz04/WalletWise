@@ -5,8 +5,6 @@ import 'signup_page.dart';
 import 'home_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-// import '../main.dart'; // Uncomment if you want to use the color from main.dart
-
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
 
@@ -22,22 +20,36 @@ class _LoginPageState extends State<LoginPage> {
   // State variable to toggle password visibility
   bool _isPasswordVisible = false;
 
-  // Define your app's primary color here or import it
+  // Define your app's primary color
   final Color primaryColor = const Color(0xFF4CAF50); // Student-friendly Green
 
   void _login() async {
     if (_formKey.currentState!.validate()) {
       try {
+        // 1. Attempt to sign in
         await FirebaseAuth.instance.signInWithEmailAndPassword(
-          email: _emailController.text,
-          password: _passwordController.text,
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
         );
         
+        // --- FIX 1: Check if widget is still on screen (Fixes Blue Line) ---
+        if (!mounted) return;
+
+        // --- FIX 2: Get the name to pass to HomePage (Fixes Red Line) ---
+        final user = FirebaseAuth.instance.currentUser;
+        final String displayName = user?.displayName ?? "Student";
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const HomePage()),
+          MaterialPageRoute(
+            // Pass the required username argument here
+            builder: (context) => HomePage(username: displayName),
+          ),
         );
       } on FirebaseAuthException catch (e) {
+        // Check mounted here too before showing SnackBar
+        if (!mounted) return;
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.message ?? 'Login failed')),
         );
@@ -73,7 +85,7 @@ class _LoginPageState extends State<LoginPage> {
                 children: <Widget>[
                   // --- LOGO SECTION ---
                   Icon(
-                    Icons.savings_rounded, // Budget friendly icon
+                    Icons.savings_rounded,
                     color: primaryColor,
                     size: 80,
                   ),
@@ -205,7 +217,6 @@ class _LoginPageState extends State<LoginPage> {
                       const Text("Don't have an account? "),
                       GestureDetector(
                         onTap: () {
-                          // This code creates the link to the Signup Page
                           Navigator.push(
                             context,
                             MaterialPageRoute(

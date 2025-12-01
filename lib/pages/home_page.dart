@@ -1,101 +1,170 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'dart:async';
 
-// --- RELATIVE IMPORTS ---
-// Make sure these files exist in your lib/pages/ folder
 import 'stats_page.dart';
 import 'goals_page.dart';
 import 'salaries_page.dart';
 
 class HomePage extends StatefulWidget {
-  final String username; 
-  // Defaulting to "Student" if no name is passed
-  const HomePage({super.key, this.username = "Student"});
+  final String username;
+  const HomePage({super.key, required this.username});
 
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
-  int _selectedIndex = 0; 
+  int _selectedIndex = 0;
   
-  // --- STATE VARIABLES ---
+  // Database Reference
+  late DatabaseReference _userRef;
+  StreamSubscription? _userDataSubscription;
+
+  // State Variables
   double _monthlyIncome = 0.0;
-  double _balance = 0.0; 
-  
-  // Data Lists
-  List<Map<String, dynamic>> _transactions = []; 
-  final List<Map<String, dynamic>> _savingsGoals = [];
+  double _balance = 0.0;
+  List<Map<String, dynamic>> _transactions = [];
+  List<Map<String, dynamic>> _savingsGoals = [];
 
-  // Theme Colors
-  final Color primaryDark = const Color(0xFF04503d); // Dark Green
-  final Color primaryLight = const Color(0xFF6DA18D); // Light Green
+  final Color primaryDark = const Color(0xFF04503d);
+  final Color primaryLight = const Color(0xFF6DA18D);
 
-  // --- LOGIC: SALARIES (Connected to SalariesPage) ---
-  void _addSalaryToBalance(double amount) {
-    setState(() {
-      _balance += amount;
-      
-      // Add record to transactions so it appears in history
-      _transactions.insert(0, {
-        'category': 'Salary',
-        'amount': amount, // Positive amount for income logic
-        'note': 'Payday collected',
-        'date': DateTime.now(),
-        'isIncome': true, // Flag to show it as green
-      });
-    });
+  @override
+  void initState() {
+    super.initState();
+    _setupRealtimeListener();
   }
 
-  // --- LOGIC: GOALS (Connected to GoalsPage) ---
-  void _addGoal(String title, double target, double saved) {
-    setState(() {
-      _savingsGoals.add({'title': title, 'target': target, 'saved': saved});
-    });
-  }
+  void _setupRealtimeListener() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  void _deleteGoal(int index) {
-    setState(() {
-      _savingsGoals.removeAt(index);
-    });
-  }
+    _userRef = FirebaseDatabase.instance.ref("users/${user.uid}");
 
-  void _addFundsToGoal(int index, double amount) {
-    setState(() {
-      if (_balance >= amount) {
-        _savingsGoals[index]['saved'] += amount;
-        _balance -= amount; // Deduct from wallet when moving to savings
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Not enough balance to save that amount!')),
-        );
+    _userDataSubscription = _userRef.onValue.listen((event) {
+      final data = event.snapshot.value as Map?;
+      if (data == null) return;
+
+      if (mounted) {
+        setState(() {
+          // 1. Update Finances
+          final finances = data['finances'] as Map?;
+          _balance = (finances?['balance'] ?? 0.0).toDouble();
+          _monthlyIncome = (finances?['monthlyIncome'] ?? 0.0).toDouble();
+
+          // 2. Update Transactions
+          final txMap = data['transactions'] as Map?;
+          _transactions.clear();
+          if (txMap != null) {
+            txMap.forEach((key, value) {
+              _transactions.add({
+                'id': key,
+                'category': value['category'],
+                'amount': (value['amount'] ?? 0.0).toDouble(),
+                'note': value['note'],
+                'date': DateTime.tryParse(value['date']) ?? DateTime.now(),
+                'isIncome': value['isIncome'] ?? false,
+              });
+            });
+            // Sort by date (newest first)
+            _transactions.sort((a, b) => b['date'].compareTo(a['date']));
+          }
+
+          // 3. Update Goals
+          final goalsMap = data['goals'] as Map?;
+          _savingsGoals.clear();
+          if (goalsMap != null) {
+            goalsMap.forEach((key, value) {
+              _savingsGoals.add({
+                'id': key,
+                'title': value['title'],
+                'target': (value['target'] ?? 0.0).toDouble(),
+                'saved': (value['saved'] ?? 0.0).toDouble(),
+              });
+            });
+          }
+        });
       }
     });
   }
 
-  // --- LOGIC: TRANSACTIONS (EXPENSES) ---
+  @override
+  void dispose() {
+    _userDataSubscription?.cancel();
+    super.dispose();
+  }
+
+  // --- ACTIONS (Write to Database) ---
+
+  void _addSalaryToBalance(double amount) {
+    // Update balance and add a transaction
+    double newBalance = _balance + amount;
+    _userRef.child('finances').update({'balance': newBalance});
+
+    _userRef.child('transactions').push().set({
+      'category': 'Salary',
+      'amount': amount,
+      'note': 'Payday collected',
+      'date': DateTime.now().toIso8601String(),
+      'isIncome': true,
+    });
+  }
+
+  void _addGoal(String title, double target, double saved) {
+    _userRef.child('goals').push().set({
+      'title': title,
+      'target': target,
+      'saved': saved,
+    });
+  }
+
+  void _deleteGoal(int index) {
+    String? key = _savingsGoals[index]['id'];
+    if (key != null) {
+      _userRef.child('goals/$key').remove();
+    }
+  }
+
+  void _addFundsToGoal(int index, double amount) {
+    if (_balance >= amount) {
+      String? key = _savingsGoals[index]['id'];
+      double currentSaved = _savingsGoals[index]['saved'];
+      
+      if (key != null) {
+        // Update goal saved amount
+        _userRef.child('goals/$key').update({'saved': currentSaved + amount});
+        // Deduct from main balance
+        _userRef.child('finances').update({'balance': _balance - amount});
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not enough balance!')),
+      );
+    }
+  }
+
   void _addTransaction(String category, double amount, String note) {
-    setState(() {
-      _transactions.insert(0, {
-        'category': category,
-        'amount': amount,
-        'note': note,
-        'date': DateTime.now(),
-        'isIncome': false,
-      });
-      _balance -= amount; 
+    _userRef.child('transactions').push().set({
+      'category': category,
+      'amount': amount,
+      'note': note,
+      'date': DateTime.now().toIso8601String(),
+      'isIncome': false,
     });
+    // Deduct expense from balance
+    _userRef.child('finances').update({'balance': _balance - amount});
   }
 
-  // --- LOGIC: INCOME (ALLOWANCE) ---
   void _updateIncome(double amount) {
-    setState(() {
-      _monthlyIncome = amount;
-      // Logic: If balance is 0, we assume they are starting fresh with this allowance
-      if (_balance == 0) _balance = amount; 
-    });
+    _userRef.child('finances').update({'monthlyIncome': amount});
+    // If balance is 0, initialize it with allowance
+    if (_balance == 0) {
+      _userRef.child('finances').update({'balance': amount});
+    }
   }
 
-  // --- MODAL: ADD EXPENSE ---
   void _showAddExpenseModal() {
     TextEditingController amountController = TextEditingController();
     TextEditingController nameController = TextEditingController();
@@ -132,7 +201,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- MODAL: SET INCOME ---
   void _showAddIncomeDialog() {
     TextEditingController incomeController = TextEditingController();
     showDialog(
@@ -155,8 +223,11 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- DASHBOARD WIDGET (Fixed Syntax Errors) ---
   Widget buildDashboard() {
+    // ... [Use the exact same buildDashboard code from your uploaded file, just ensure it uses the variables _balance, _monthlyIncome, etc.] ...
+    // Note: The original code for buildDashboard provided in the question is fully compatible with these state variables.
+    // I will include the critical parts below for clarity.
+    
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
@@ -164,8 +235,6 @@ class _HomePageState extends State<HomePage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 20),
-
-            // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -176,14 +245,21 @@ class _HomePageState extends State<HomePage> {
                     Text(widget.username, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
                   ],
                 ),
-                const CircleAvatar(radius: 25, backgroundColor: Colors.white24, child: Icon(Icons.person, color: Colors.white)),
+                // Sign out button
+                GestureDetector(
+                  onTap: () async {
+                    await FirebaseAuth.instance.signOut();
+                    // Login page is handled by StreamBuilder in main.dart, but we can pop manually if needed
+                    // Navigator.pop(context); 
+                  },
+                  child: const CircleAvatar(radius: 25, backgroundColor: Colors.white24, child: Icon(Icons.logout, color: Colors.white)),
+                ),
               ],
             ),
-
             const SizedBox(height: 30),
-
-            // Balance Card
-            Container(
+            // ... (Rest of your dashboard UI code: Balance Card, Recent Transactions) ...
+            // Use _balance, _monthlyIncome, and _transactions as they are automatically updated by the listener.
+             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(25),
               decoration: BoxDecoration(
@@ -198,12 +274,9 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 10),
                   Text("₱${_balance.toStringAsFixed(2)}", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white)),
                   const SizedBox(height: 20),
-                  
-                  // Allowance vs Expenses Summary
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      // INCOME CLICKABLE AREA
                       GestureDetector(
                         onTap: _showAddIncomeDialog, 
                         child: Row(
@@ -220,8 +293,6 @@ class _HomePageState extends State<HomePage> {
                           ],
                         ),
                       ),
-                      
-                      // EXPENSES DISPLAY AREA
                       Row(
                         children: [
                           const Icon(Icons.arrow_upward, color: Colors.white70),
@@ -240,13 +311,9 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-
             const SizedBox(height: 30),
-            
-            // Recent Transactions Section
             const Text("Recent Transactions", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 15),
-
             _transactions.isEmpty
               ? Container(
                   padding: const EdgeInsets.all(20),
@@ -320,43 +387,28 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: primaryDark, 
-      
-      // Floating button only on Home Tab (Index 0)
+      backgroundColor: primaryDark,
       floatingActionButton: _selectedIndex == 0 
         ? FloatingActionButton(
             onPressed: _showAddExpenseModal, 
-            backgroundColor: const Color(0xFFFDD835), // Yellow contrast
+            backgroundColor: const Color(0xFFFDD835),
             child: const Icon(Icons.add, color: Colors.black)
           )
         : null,
-
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          buildDashboard(), // Tab 0: Dashboard
-
-          // Tab 1: Stats
-          StatsPage(
-            monthlyIncome: _monthlyIncome,
-            transactions: _transactions,
-          ),
-
-          // Tab 2: Goals
+          buildDashboard(),
+          StatsPage(monthlyIncome: _monthlyIncome, transactions: _transactions),
           GoalsPage(
             goals: _savingsGoals,
             onAddGoal: _addGoal,
             onDeleteGoal: _deleteGoal,
             onAddFunds: _addFundsToGoal,
           ),
-
-          // Tab 3: Salaries
-          SalariesPage(
-            onCollectSalary: _addSalaryToBalance,
-          ), 
+          SalariesPage(onCollectSalary: _addSalaryToBalance), 
         ],
       ),
-
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) => setState(() => _selectedIndex = index),
@@ -372,4 +424,3 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
-
