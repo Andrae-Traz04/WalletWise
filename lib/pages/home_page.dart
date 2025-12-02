@@ -18,7 +18,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   
-  // Database Reference
+  
   late DatabaseReference _userRef;
   StreamSubscription? _userDataSubscription;
 
@@ -41,7 +41,7 @@ class _HomePageState extends State<HomePage> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    _userRef = FirebaseDatabase.instance.ref("users/${user.uid}");
+    _userRef = FirebaseDatabase.instance.ref("users/₱{user.uid}");
 
     _userDataSubscription = _userRef.onValue.listen((event) {
       final data = event.snapshot.value as Map?;
@@ -72,7 +72,7 @@ class _HomePageState extends State<HomePage> {
             _transactions.sort((a, b) => b['date'].compareTo(a['date']));
           }
 
-          // 3. Update Goals
+          
           final goalsMap = data['goals'] as Map?;
           _savingsGoals.clear();
           if (goalsMap != null) {
@@ -96,7 +96,7 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  // --- ACTIONS (Write to Database) ---
+  
 
   void _addSalaryToBalance(double amount) {
     // Update balance and add a transaction
@@ -123,7 +123,7 @@ class _HomePageState extends State<HomePage> {
   void _deleteGoal(int index) {
     String? key = _savingsGoals[index]['id'];
     if (key != null) {
-      _userRef.child('goals/$key').remove();
+      _userRef.child('goals/₱key').remove();
     }
   }
 
@@ -134,8 +134,8 @@ class _HomePageState extends State<HomePage> {
       
       if (key != null) {
         // Update goal saved amount
-        _userRef.child('goals/$key').update({'saved': currentSaved + amount});
-        // Deduct from main balance
+        _userRef.child('goals/₱key').update({'saved': currentSaved + amount});
+      
         _userRef.child('finances').update({'balance': _balance - amount});
       }
     } else {
@@ -153,7 +153,7 @@ class _HomePageState extends State<HomePage> {
       'date': DateTime.now().toIso8601String(),
       'isIncome': false,
     });
-    // Deduct expense from balance
+  
     _userRef.child('finances').update({'balance': _balance - amount});
   }
 
@@ -207,7 +207,7 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Set Monthly Allowance'),
-        content: TextField(controller: incomeController, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'e.g., 5000', prefixText: '\$ ')),
+        content: TextField(controller: incomeController, keyboardType: TextInputType.number, decoration: const InputDecoration(hintText: 'e.g., 5000', prefixText: '\₱ ')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
@@ -224,9 +224,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget buildDashboard() {
-    // ... [Use the exact same buildDashboard code from your uploaded file, just ensure it uses the variables _balance, _monthlyIncome, etc.] ...
-    // Note: The original code for buildDashboard provided in the question is fully compatible with these state variables.
-    // I will include the critical parts below for clarity.
+    
     
     return SafeArea(
       child: SingleChildScrollView(
@@ -245,20 +243,18 @@ class _HomePageState extends State<HomePage> {
                     Text(widget.username, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
                   ],
                 ),
-                // Sign out button
+                
                 GestureDetector(
                   onTap: () async {
                     await FirebaseAuth.instance.signOut();
-                    // Login page is handled by StreamBuilder in main.dart, but we can pop manually if needed
-                    // Navigator.pop(context); 
+                    
                   },
                   child: const CircleAvatar(radius: 25, backgroundColor: Colors.white24, child: Icon(Icons.logout, color: Colors.white)),
                 ),
               ],
             ),
             const SizedBox(height: 30),
-            // ... (Rest of your dashboard UI code: Balance Card, Recent Transactions) ...
-            // Use _balance, _monthlyIncome, and _transactions as they are automatically updated by the listener.
+            
              Container(
               width: double.infinity,
               padding: const EdgeInsets.all(25),

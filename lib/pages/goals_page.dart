@@ -4,14 +4,14 @@ class GoalsPage extends StatefulWidget {
   final List<Map<String, dynamic>> goals;
   final Function(String title, double target, double saved) onAddGoal;
   final Function(int index) onDeleteGoal;
-  final Function(int index, double amount) onAddFunds; // <--- New Callback
+  final Function(int index, double amount) onAddFunds; 
 
   const GoalsPage({
     super.key,
     required this.goals,
     required this.onAddGoal,
     required this.onDeleteGoal,
-    required this.onAddFunds, // <--- Require it here
+    required this.onAddFunds,
   });
 
   @override
@@ -21,7 +21,7 @@ class GoalsPage extends StatefulWidget {
 class _GoalsPageState extends State<GoalsPage> {
   final Color primaryColor = const Color(0xFF4CAF50);
 
-  // --- DIALOG: CREATE NEW GOAL ---
+
   void _showAddGoalDialog() {
     TextEditingController titleController = TextEditingController();
     TextEditingController targetController = TextEditingController();
@@ -35,8 +35,8 @@ class _GoalsPageState extends State<GoalsPage> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: titleController, decoration: const InputDecoration(labelText: 'Goal Name')),
-            TextField(controller: targetController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target Amount (\$)')),
-            TextField(controller: savedController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Initial Savings (\$)')),
+            TextField(controller: targetController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Target Amount (\₱)')),
+            TextField(controller: savedController, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Initial Savings (\₱)')),
           ],
         ),
         actions: [
@@ -60,21 +60,21 @@ class _GoalsPageState extends State<GoalsPage> {
     );
   }
 
-  // --- NEW DIALOG: ADD FUNDS TO EXISTING GOAL ---
+ 
   void _showAddFundsDialog(int index) {
     TextEditingController amountController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Add to ${widget.goals[index]['title']}'),
+        title: Text('Add to ₱{widget.goals[index]['title']}'),
         content: TextField(
           controller: amountController,
           keyboardType: TextInputType.number,
           autofocus: true,
           decoration: const InputDecoration(
             labelText: 'Amount to Add',
-            prefixText: '\$ ',
+            prefixText: '\₱ ',
           ),
         ),
         actions: [
@@ -83,7 +83,7 @@ class _GoalsPageState extends State<GoalsPage> {
             onPressed: () {
               if (amountController.text.isNotEmpty) {
                 double amount = double.tryParse(amountController.text) ?? 0.0;
-                widget.onAddFunds(index, amount); // Call the logic in HomePage
+                widget.onAddFunds(index, amount); 
                 Navigator.pop(context);
               }
             },
@@ -135,7 +135,7 @@ class _GoalsPageState extends State<GoalsPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Header: Title + Delete
+                      
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -147,11 +147,11 @@ class _GoalsPageState extends State<GoalsPage> {
                         ],
                       ),
                       
-                      // Progress Text
-                      Text('\$${goal['saved']} saved of \$${goal['target']}', style: const TextStyle(color: Colors.grey)),
+                      
+                      Text('\₱₱{goal['saved']} saved of \₱₱{goal['target']}', style: const TextStyle(color: Colors.grey)),
                       const SizedBox(height: 10),
                       
-                      // Progress Bar
+                      
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: LinearProgressIndicator(
